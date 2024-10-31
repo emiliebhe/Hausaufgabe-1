@@ -1,0 +1,136 @@
+import os
+import pygame
+import random
+
+class Settings:
+    WINDOW_WIDTH = 600
+    WINDOW_HEIGHT = 700
+    FPS = 60
+    FILE_PATH = os.path.dirname(os.path.abspath(__file__))
+    IMAGE_PATH = os.path.join(FILE_PATH, "images")
+
+class Enemy:
+    def __init__(self):
+        self.image = pygame.image.load(os.path.join(Settings.IMAGE_PATH, "alienbig0101.png")).convert()
+        self.image.set_colorkey("black")
+        self.image = pygame.transform.scale(self.image, (50, 45))
+        self.rect = self.image.get_rect(topleft=(0, 0))  # Start links oben
+        self.speed_x = random.randint(1, 5)
+        self.speed_y = random.randint(1, 5)
+
+    def move(self):
+        self.rect.x += self.speed_x
+        self.rect.y += self.speed_y
+
+        # An den Rändern abprallen
+        if self.rect.right > Settings.WINDOW_WIDTH or self.rect.left < 0:
+            self.speed_x *= -1
+        if self.rect.bottom > Settings.WINDOW_HEIGHT or self.rect.top < 0:
+            self.speed_y *= -1
+
+class GrowingSprite:
+    def __init__(self):
+        self.image = pygame.Surface((20, 20), pygame.SRCALPHA)
+        self.image.fill((255, 255, 0, 128))
+        self.rect = self.image.get_rect(center=(random.randint(50, Settings.WINDOW_WIDTH - 50),
+                                                random.randint(50, Settings.WINDOW_HEIGHT - 50)))
+        self.growth_rate = 5
+
+    def grow(self):
+        self.rect.inflate_ip(self.growth_rate, self.growth_rate)
+        self.image = pygame.transform.scale(self.image, (self.rect.width, self.rect.height))
+
+    def draw(self, screen):
+        screen.blit(self.image, self.rect.topleft)
+
+    def check_collision(self, obstacles):
+        for obstacle in obstacles:
+            if self.rect.colliderect(obstacle):
+                return True
+        return False
+
+def create_obstacles():
+    obstacles = []
+    obstacle_images = ["stein01.png", "stein02.png", "stein03.png", "stein04.png", "stein05.png"]
+    obstacle_positions = [(300, 350), (90, 512), (90, 200), (500, 512), (400, 150)]
+    for img, pos in zip(obstacle_images, obstacle_positions):
+        obstacle_image = pygame.image.load(os.path.join(Settings.IMAGE_PATH, img)).convert()
+        obstacle_image = pygame.transform.scale(obstacle_image, (40, 40))
+        obstacle_image.set_colorkey("white")
+        obstacle_rect = pygame.Rect(*pos, 40, 40)
+        obstacles.append((obstacle_image, obstacle_rect))
+    return obstacles
+
+def main():
+    pygame.init()
+    screen = pygame.display.set_mode((Settings.WINDOW_WIDTH, Settings.WINDOW_HEIGHT))
+    pygame.display.set_caption("Kombiniertes Spiel")
+    clock = pygame.time.Clock()
+
+    # Hintergrundbild laden
+    background_image = pygame.image.load(os.path.join(Settings.IMAGE_PATH, "background03.png")).convert()
+    background_image = pygame.transform.scale(background_image, (Settings.WINDOW_WIDTH, Settings.WINDOW_HEIGHT))
+
+    # Defender einrichten
+    defender_image = pygame.image.load(os.path.join(Settings.IMAGE_PATH, "defender01.png")).convert_alpha()
+    defender_image = pygame.transform.scale(defender_image, (30, 30))
+    defender_rect = pygame.rect.Rect(10, 80, 30, 30)
+    defender_speed = 10
+    defender_derection_x = -1
+    defender_derection_y = 1
+
+    # Hindernisse und Gegner
+    obstacles = create_obstacles()
+    enemies = []
+    enemy_spawn_timer = 0
+    sprite = GrowingSprite()
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        # Gegner in zufälligen Abständen erzeugen
+        enemy_spawn_timer += 1
+        if enemy_spawn_timer > random.randint(120, 240):
+            enemies.append(Enemy())
+            enemy_spawn_timer = 0
+
+        # Gegner bewegen und Kollision prüfen
+        for enemy in enemies[:]:
+            enemy.move()
+            for _, obstacle_rect in obstacles:
+                if enemy.rect.colliderect(obstacle_rect):
+                    enemies.remove(enemy)
+                    break
+
+        # Defender bewegen
+        defender_rect.move_ip(defender_derection_x * defender_speed, defender_derection_y * defender_speed)
+        if defender_rect.left < 0 or defender_rect.right > Settings.WINDOW_WIDTH:
+            defender_derection_x *= -1
+        if defender_rect.top < 0 or defender_rect.bottom > Settings.WINDOW_HEIGHT:
+            defender_derection_y *= -1
+
+        # Sprite wachsen lassen und auf Kollision prüfen
+        sprite.grow()
+        if sprite.check_collision([rect for _, rect in obstacles]):
+            sprite = GrowingSprite()
+
+        # Zeichnen
+        screen.blit(background_image, (0, 0))
+        screen.blit(defender_image, defender_rect)
+        for obstacle_image, obstacle_rect in obstacles:
+            screen.blit(obstacle_image, obstacle_rect.topleft)
+        for enemy in enemies:
+            screen.blit(enemy.image, enemy.rect.topleft)
+        sprite.draw(screen)
+
+        pygame.display.flip()
+        clock.tick(Settings.FPS)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
+
